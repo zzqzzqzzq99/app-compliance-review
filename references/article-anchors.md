@@ -1,6 +1,6 @@
 # 条文锚定表（Article Anchors）
 
-> **用途**：本表将skill引用的每一条合规义务依据与具体法规条款建立程序化映射。skill每次运行时，通过运行时检测到的MCP后端（北大法宝pkulaw或华宇元典yuandian，自动扫描已连接连接器，详见SKILL.md"MCP法规核验后端"章节）按锚点核验法规现行有效性与条款内容，确保在法规频繁修订场景下依据始终准确。
+> **用途**：本表将skill引用的每一条合规义务依据与具体法规条款建立程序化映射。skill每次运行时，通过运行时检测到的MCP后端（优先华宇元典yuandian，备选其他法律检索MCP，自动扫描已连接连接器，详见SKILL.md"MCP法规核验后端"章节）按锚点核验法规现行有效性与条款内容，确保在法规频繁修订场景下依据始终准确。
 
 ## 使用方法
 
@@ -23,22 +23,9 @@
 
 ### 2. MCP核验流程（支持双后端）
 
-skill每次运行时，先读取 `assets/mcp-backends.yaml` 确认用户配置的活跃后端（pkulaw或yuandian），然后按对应后端的工具映射执行核验：
+skill每次运行时，先扫描已连接MCP连接器，优先使用华宇元典（yuandian），不可用则回退使用其他已连接的法律检索MCP，然后按对应后端的工具映射执行核验：
 
-**后端1：北大法宝（pkulaw）** — WorkBuddy内置连接器，无需额外配置
-
-```
-对article-anchors.md中每个anchor：
-  1. 调用 mcp__pkulaw__mcp-law/get_law_list(title=law_search_key)
-     → 检查返回结果中TimelinessDic是否包含"现行有效"
-     → 如显示"废止或失效"或"已被修改"，标记该anchor为需更新
-  2. 如需确认条款内容，调用 mcp__pkulaw__mcp-law-search-service/get_article(title=law_title, number=law_article_no)
-     → 核验条款内容是否与skill引用的一致
-  3. 如发现法规已更新，调用 mcp__pkulaw__mcp-law-search-service/search_article(text=关键词) 检索最新条款
-  4. 将核验结果记入运行日志，对失效依据在报告中标注警告
-```
-
-**后端2：华宇元典（yuandian）** — 需在元典开放平台注册获取API Key并配置MCP
+**首选：华宇元典（yuandian）** — 需在元典开放平台注册获取API Key并配置MCP
 
 ```
 对article-anchors.md中每个anchor：
@@ -50,6 +37,19 @@ skill每次运行时，先读取 `assets/mcp-backends.yaml` 确认用户配置�
   3. 如发现法规已更新，调用 yuandian_law_vector_search(query=关键词) 检索最新条款
   4. 将核验结果记入运行日志，对失效依据在报告中标注警告
   5.（可选）调用法律幻觉校验接口批量校验报告中全部法律引用的准确性
+```
+
+**备选：其他法律检索MCP** — 运行时检测已连接的其他法律检索MCP
+
+```
+对article-anchors.md中每个anchor：
+  1. 调用对应后端的法规检索工具（keyword=law_search_key）
+     → 检查返回结果中的法规时效性字段，确认是否现行有效
+     → 如显示已废止或已修订，标记该anchor为需更新
+  2. 如需确认条款内容，调用对应后端的条款查询工具
+     → 核验条款内容是否与skill引用的一致
+  3. 如发现法规已更新，调用对应后端的关键词搜索工具检索最新条款
+  4. 将核验结果记入运行日志，对失效依据在报告中标注警告
 ```
 
 ### 3. 核验频率策略

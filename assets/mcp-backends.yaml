@@ -1,0 +1,29 @@
+# MCP法规核验后端配置
+# 
+# 本技能采用运行时自动检测策略：
+# 1. 优先检测华宇元典（yuandian）MCP连接器是否已连接
+# 2. 华宇元典可用 → 直接使用
+# 3. 华宇元典不可用 → 自动回退使用其他已连接的法律检索MCP
+# 4. 均不可用 → 跳过MCP核验，报告中标注警告
+#
+# 华宇元典 MCP 配置示例（在 WorkBuddy MCP 设置中添加）：
+#
+# {
+#   "yuandian-law": {
+#     "type": "http",
+#     "url": "https://open.chineselaw.com/mcp/law/stream",
+#     "headers": {
+#       "Accept": "application/json, text/event-stream",
+#       "Authorization": "Bearer YOUR_YUANDIAN_API_KEY"
+#     }
+#   }
+# }
+
+# 当前活跃后端（由运行时自动检测，此处为参考信息）
+active_backend: auto  # auto: 运行时自动检测; yuandian: 强制华宇元典
+
+# 华宇元典工具映射
+yuandian:
+  fg_search: yuandian_rh_fg_search          # 法规现行状态查询
+  ft_detail: yuandian_rh_ft_detail          # 条款内容核验
+  law_vector: yuandian_law_vector_search    # 关键词检索替代条款

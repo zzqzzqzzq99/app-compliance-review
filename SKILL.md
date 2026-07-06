@@ -1,8 +1,13 @@
 ---
 name: app-compliance-review
 version: 1.0.0
-description: 中国APP个人信息保护合规检查技能。面向公司法务、数据合规律师或合规顾问，对移动应用程序（APP）开展完整的个人信息保护合规评审，可直接面向业务部门交付合规审查报告与整改清单。采用"合规事实查明 + 声明一致性核验"两阶段审查方法论，覆盖11大合规模块53检查项，法规依据通过运行时检测的MCP后端（北大法宝/华宇元典）实时核验。触发关键词：APP合规检查、个人信息保护合规、隐私政策审查、APP合规评审、数据合规审查、移动应用合规、SDK合规、权限合规、个人信息保护法合规、APP隐私合规检测、APP整改。
+description: 中国APP个人信息保护合规检查技能。面向公司法务、数据合规律师或合规顾问，对移动应用程序（APP）开展完整的个人信息保护合规评审，可直接面向业务部门交付合规审查报告与整改清单。采用"合规事实查明 + 声明一致性核验"两阶段审查方法论，覆盖11大合规模块53检查项，法规依据通过运行时检测的MCP后端（优先华宇元典）实时核验。触发关键词：APP合规检查、个人信息保护合规、隐私政策审查、APP合规评审、数据合规审查、移动应用合规、SDK合规、权限合规、个人信息保护法合规、APP隐私合规检测、APP整改。
 agent_created: true
+metadata:
+  clawdbot:
+    emoji: "🛡️"
+    requires:
+      anyBins: ["python"]
 ---
 
 # APP个人信息保护合规检查技能
@@ -21,32 +26,25 @@ agent_created: true
 
 **运行时检测逻辑：**
 
-1. 扫描已连接的MCP连接器，检测以下后端是否可用：
+1. 扫描已连接的MCP连接器，按以下优先级检测法律检索MCP后端：
 
-| 后端 | 检测方式 | 工具前缀 |
-|------|----------|----------|
-| 北大法宝（pkulaw） | 检测 `mcp__pkulaw__` 前缀工具是否可用 | `mcp__pkulaw__mcp-law/` |
-| 华宇元典（yuandian） | 检测 `yuandian_` 前缀工具是否可用 | `yuandian_rh_fg_search` 等 |
+| 优先级 | 后端 | 检测方式 | 工具前缀 |
+|--------|------|----------|----------|
+| 首选 | 华宇元典（yuandian） | 检测 `yuandian_` 前缀工具是否可用 | `yuandian_rh_fg_search` 等 |
+| 备选 | 其他可用法律检索MCP | 运行时检测其他已连接的法律检索MCP | 依具体后端而定 |
 
 2. 根据检测结果选择后端：
+   - **华宇元典可用** → 优先使用华宇元典
+   - **华宇元典不可用，但检测到其他法律检索MCP** → 自动回退使用其他可用后端
    - **0个可用** → 报告中标注"⚠️ 未检测到法规核验MCP后端，法规依据未能实时核验，建议人工确认"，跳过MCP核验步骤
-   - **1个可用** → 自动使用该后端
-   - **2个均可用** → **询问用户选择**使用哪一个后端进行本次核验
-
-3. 询问用户时提供以下信息辅助决策：
-
-| 后端 | 优势 |
-|------|------|
-| 北大法宝 | WorkBuddy内置，零额外配置，返回TimelinessDic字段直接判断时效性 |
-| 华宇元典 | 额外支持法律幻觉校验接口，可批量校验报告中法律引用准确性 |
 
 **后端确定后，按对应工具映射执行核验：**
 
-| 核验动作 | 北大法宝 | 华宇元典 |
-|----------|----------|----------|
-| 核验法规现行状态 | `mcp__pkulaw__mcp-law/get_law_list(title=...)` | `yuandian_rh_fg_search(keyword=...)` |
-| 核验条款内容 | `mcp__pkulaw__mcp-law-search-service/get_article(...)` | `yuandian_rh_ft_detail(...)` |
-| 检索替代条款 | `mcp__pkulaw__mcp-law-search-service/search_article(...)` | `yuandian_law_vector_search(...)` |
+| 核验动作 | 华宇元典（首选） | 其他法律检索MCP（备选） |
+|----------|-------------------|--------------------------|
+| 核验法规现行状态 | `yuandian_rh_fg_search(keyword=...)` | 运行时检测确定 |
+| 核验条款内容 | `yuandian_rh_ft_detail(...)` | 运行时检测确定 |
+| 检索替代条款 | `yuandian_law_vector_search(...)` | 运行时检测确定 |
 
 华宇元典MCP配置方式（如用户尚未配置）：
 ```json
@@ -140,6 +138,19 @@ agent_created: true
 python scripts/material_validator.py --materials-dir /path/to/materials/
 ```
 
+### 材料格式灵活处理策略
+
+实践中业务部门提交的材料格式可能与模板预期不完全一致，审查人员应根据以下策略灵活处理：
+
+| 常见偏差 | 处理方式 |
+|----------|----------|
+| SDK清单以PDF/Word/图片形式提供（非Excel） | 要求业务部门转换为Excel/CSV重新提交；如确无法转换，审查人员手动将关键列（SDK名称、公司、收集信息、目的）提取至结构化表格再填入 `check_results.json` |
+| 权限清单以邮件正文或截图提供 | 请业务部门参照 `assets/input-materials-template.md` 中权限清单字段整理为标准格式 |
+| 隐私政策为企业内部链接（如iwiki/语雀/飞书文档） | 直接在线审查即可，确认版本与线上一致；如有版本差异，以线上版本为准 |
+| 双清单（已收集/第三方共享）未单独提供，已合并入隐私政策 | 审查人员从隐私政策中独立提取对应内容，在报告中注明"自隐私政策提取" |
+| APK为加固包（无法直接静态分析） | 联系业务部门提供未加固包；如无法提供，标注"APK已加固，静态分析受限"，结果以客户提供的SDK/权限清单为主要依据 |
+| 部分材料为纸质扫描件（PDF图片） | 核心字段（SDK名称、权限、信息类型）手动录入结构化表格后再审查，扫描件留档 |
+
 ## 工作流程
 
 ### 阶段一：材料收集与校验（Day 1）
@@ -173,7 +184,7 @@ python scripts/apk_analyzer.py --apk /path/to/app.apk --output apk_report.json -
 7. 将隐私政策声明的SDK、权限、个人信息类型与APK技术取证结果逐项比对（一致性核验）
 8. 将客户提供的SDK清单与APK识别的SDK逐项比对（一致性核验）
 9. 将权限使用清单与AndroidManifest.xml声明的权限逐项比对（一致性核验）
-10. 记录每项检查的事实发现、合规判定、风险等级
+10. 记录每项检查的事实发现、合规判定、风险等级，参照 `assets/check-results-schema.md` 整理为 `check_results.json`（可直接供 `report_generator.py` 使用）
 
 ### 阶段四：法规依据实时核验（Day 7）—— MCP条文锚定
 
@@ -183,7 +194,7 @@ python scripts/apk_analyzer.py --apk /path/to/app.apk --output apk_report.json -
 
 **核验流程**：
 
-1. 扫描已连接MCP连接器，检测pkulaw/yuandian可用性（0个→跳过并警告；1个→自动使用；2个→询问用户选择）
+1. 扫描已连接MCP连接器，优先检测yuandian可用性（华宇元典可用→优先使用；不可用但检测到其他法律检索MCP→回退使用；0个→跳过并警告）
 2. 加载 `references/article-anchors.md`，获取全部锚点清单
 3. 对每个锚点，按核验频率策略执行：
    - `every_run` 类锚点（个保法、网安法、数据安全法、认定方法，共42个）：每次运行必核验
@@ -191,20 +202,7 @@ python scripts/apk_analyzer.py --apk /path/to/app.apk --output apk_report.json -
    - `annual` 类锚点（GB/T国家标准，共7个）：标注"需手动核验"，因法规MCP后端通常不收录国家标准
 4. 根据活跃后端调用对应MCP工具核验：
 
-**后端为pkulaw（北大法宝）时：**
-
-```python
-# 核验法规现行状态（检查TimelinessDic字段是否为"现行有效"）
-mcp__pkulaw__mcp-law/get_law_list(title="个人信息保护法")
-
-# 核验具体条款内容
-mcp__pkulaw__mcp-law-search-service/get_article(title="中华人民共和国个人信息保护法", number="十七")
-
-# 法规已修订时检索替代条款
-mcp__pkulaw__mcp-law-search-service/search_article(text="敏感个人信息单独同意")
-```
-
-**后端为yuandian（华宇元典）时：**
+**后端为yuandian（华宇元典，首选）时：**
 
 ```python
 # 核验法规现行状态（检查返回结果中的时效性字段）
@@ -216,20 +214,27 @@ yuandian_rh_ft_detail(law_title="中华人民共和国个人信息保护法", ar
 # 法规已修订时检索替代条款
 yuandian_law_vector_search(query="敏感个人信息单独同意")
 ```
+
+**后端为其他法律检索MCP（备选）时：**
+
+根据运行时检测到的具体后端，调用其对应的法规查询、条款检索、关键词搜索等工具完成核验。具体工具名称和参数格式依后端而定。
+
+具体核验步骤如下：
+
    - **核验法规现行状态**：按活跃后端调用对应工具
-     - pkulaw: `mcp__pkulaw__mcp-law/get_law_list(title=<law_search_key>)`，检查 `TimelinessDic` 字段
      - yuandian: `yuandian_rh_fg_search(keyword=<law_search_key>)`，检查返回结果中的时效性字段
+     - 备选后端：依运行时检测到的具体后端调用对应检索工具
      - 如显示"废止或失效"，标记该锚点为失效，暂停引用
      - 如存在多个版本，确认引用最新版本（如移动互联网应用程序信息服务管理规定须用2022修订版而非2016原版）
    - **核验条款内容**：按活跃后端调用对应工具
-     - pkulaw: `mcp__pkulaw__mcp-law-search-service/get_article(title=<law_title>, number=<law_article_no>)`
      - yuandian: `yuandian_rh_ft_detail(law_title=<law_title>, article_no=<law_article_no>)`
+     - 备选后端：依运行时检测到的具体后端调用对应查询工具
      - 确认条款内容与skill引用的一致
    - **检索替代条款**（如法规已修订）：按活跃后端调用对应工具
-     - pkulaw: `mcp__pkulaw__mcp-law-search-service/search_article(text=<关键词>)`
      - yuandian: `yuandian_law_vector_search(query=<关键词>)`
-4. 将核验结果记入运行日志（JSON格式，含每个锚点的状态、核验时间、备注）
-5. 对失效或已修订的依据，在报告中标注警告并调整引用条款
+     - 备选后端：依运行时检测到的具体后端调用对应搜索工具
+5. 将核验结果记入运行日志（JSON格式，含每个锚点的状态、核验时间、备注）
+6. 对失效或已修订的依据，在报告中标注警告并调整引用条款
 
 **核验结果处理规则**：
 - 法规已废止 → 报告标注"⚠️ 原依据法规已废止，建议核实替代法规"
@@ -297,7 +302,7 @@ python scripts/report_generator.py --input check_results.json --apk-analysis apk
 本技能引用的法律法规均通过用户配置的MCP后端核验。核验方法：
 
 1. 法规名称与文号以 `references/law-library.md` 为准
-2. 读取 `assets/mcp-backends.yaml` 确认活跃后端（pkulaw或yuandian）
+2. 扫描已连接MCP连接器，优先使用华宇元典（yuandian），不可用则回退使用其他法律检索MCP（详见 `assets/mcp-backends.yaml`）
 3. 如需确认法规是否被修改或废止，按活跃后端调用对应工具检索
 4. 对于国家标准（GB/T系列），法规MCP后端可能未收录，通过官方渠道确认现行版本
 
@@ -329,6 +334,8 @@ python scripts/report_generator.py --input check_results.json --apk-analysis apk
 
 | 文件 | 用途 |
 |------|------|
+| `mcp-backends.yaml` | MCP法规核验后端配置（优先华宇元典，备选其他法律检索MCP） |
+| `check-results-schema.md` | 检查结果 JSON 数据结构文档（report_generator.py 输入格式） |
 | `input-materials-template.md` | 发送给业务部门的材料收集清单模板 |
 | `compliance-report-template.md` | 合规评审报告输出模板 |
 | `remediation-template.md` | 整改清单输出模板 |
@@ -347,3 +354,5 @@ python scripts/report_generator.py --input check_results.json --apk-analysis apk
 - 《认定方法》总共只有6条，分别对应6大类违规行为，引用时切勿编造不存在的条款编号（如§7-§11均不存在）
 - 静态取证获取的是"声明了什么、内嵌了什么、疑似接入了什么"，不等同于运行时实际调用行为——报告中凡涉及运行时行为的结论须标注"需动态测试确认"
 - 法规依据引用时须附条文锚点编号（如[A014]），便于MCP核验时追溯
+- APK 静态分析中 SDK 包名若以混淆形式出现（如 `com.a.b.c`），应标注"疑似未识别"，勿直接判定为缺失，避免误报
+- 隐私政策文本中的"用户信息"与个保法定义的"个人信息"外延不同，比对前须先做术语标准化：将材料中的俗称映射为法律定义术语再与法规条款对照
