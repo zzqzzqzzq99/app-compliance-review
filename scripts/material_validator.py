@@ -101,7 +101,7 @@ FILE_KEYWORDS = {
                            "服务功能", "产品功能", "基本功能"],
     "collected_info_list": ["已收集", "收集清单", "个人信息清单", "collected",
                             "个人信息收集", "信息收集清单", "收集个人信息"],
-    "shared_info_list": ["共享", "第三方共享", "shared", "共享清单", "对外提供",
+    "shared_info_list": ["共享", "第三方共享", "shared", "共享清单", "对外提供"],
     "personalized_recommendation": ["个性化", "算法", "推荐", "推送", "recommendation", "定向推送"],
     "account_cancellation": ["注销", "cancellation", "账号注销", "账户注销"],
     "complaint_channels": ["投诉", "举报", "complaint", "客服", "申诉", "反馈渠道"],
@@ -126,18 +126,34 @@ def scan_materials(materials_dir):
             if not f.startswith(".") and not f.startswith("_"):
                 all_files.append(os.path.join(root, f))
 
-    # 对每个文件尝试匹配材料类型
+    required_extensions = {
+        material["id"]: set(material["extensions"])
+        for material in REQUIRED_MATERIALS
+    }
+
+    # 每个文件只归入一个最匹配的材料类型，避免同一文件重复计数。
     for file_path in all_files:
         file_name = os.path.basename(file_path).lower()
         file_ext = os.path.splitext(file_path)[1].lower()
 
+        candidates = []
         for mat_id, keywords in FILE_KEYWORDS.items():
             if mat_id in found_materials:
                 continue
-            for kw in keywords:
-                if kw.lower() in file_name:
-                    found_materials[mat_id] = file_path
-                    break
+            if mat_id in required_extensions and file_ext not in required_extensions[mat_id]:
+                continue
+
+            matched_keywords = {kw.lower() for kw in keywords if kw.lower() in file_name}
+            if matched_keywords:
+                candidates.append((
+                    len(matched_keywords),
+                    max(len(keyword) for keyword in matched_keywords),
+                    mat_id,
+                ))
+
+        if candidates:
+            _, _, best_match = max(candidates)
+            found_materials[best_match] = file_path
 
     return found_materials
 
@@ -223,6 +239,13 @@ def print_report(result):
 
 
 def main():
+    # Some Windows consoles use a legacy encoding that cannot represent emoji.
+    # Keep the report readable where possible and replace unsupported glyphs
+    # instead of aborting before the JSON report can be written.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(description="输入材料完整性校验 - APP合规检查")
     parser.add_argument("--materials-dir", required=True, help="材料目录路径")
     parser.add_argument("--output", "-o", help="输出JSON报告文件路径")
