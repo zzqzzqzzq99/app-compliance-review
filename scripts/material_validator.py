@@ -248,7 +248,21 @@ def print_report(result):
         print("\n🎉 所有必需材料已齐备，可以启动合规审查！")
 
 
+def _force_utf8_output():
+    """确保 stdout/stderr 以 UTF-8 输出。
+
+    报告中含 emoji 与中文，而 Windows 在输出被重定向/管道接收时会退回
+    locale 编码（如 cp936/GBK），导致 UnicodeEncodeError 直接崩溃。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main():
+    _force_utf8_output()
     parser = argparse.ArgumentParser(description="输入材料完整性校验 - APP合规检查")
     parser.add_argument("--materials-dir", required=True, help="材料目录路径")
     parser.add_argument("--output", "-o", help="输出JSON报告文件路径")
