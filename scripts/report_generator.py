@@ -218,7 +218,9 @@ def generate_report(app_info, check_results, apk_analysis=None):
                 priorities["P1"].append(r)
         elif r.get("status") == "warning":
             risk = r.get("risk_level", "low")
-            if risk == "medium":
+            if risk == "high":
+                priorities["P1"].append(r)
+            elif risk == "medium":
                 priorities["P2"].append(r)
             else:
                 priorities["P3"].append(r)
