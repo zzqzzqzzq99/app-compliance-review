@@ -101,7 +101,7 @@ FILE_KEYWORDS = {
                            "服务功能", "产品功能", "基本功能"],
     "collected_info_list": ["已收集", "收集清单", "个人信息清单", "collected",
                             "个人信息收集", "信息收集清单", "收集个人信息"],
-    "shared_info_list": ["共享", "第三方共享", "shared", "共享清单", "对外提供",
+    "shared_info_list": ["共享", "第三方共享", "shared", "共享清单", "对外提供"],
     "personalized_recommendation": ["个性化", "算法", "推荐", "推送", "recommendation", "定向推送"],
     "account_cancellation": ["注销", "cancellation", "账号注销", "账户注销"],
     "complaint_channels": ["投诉", "举报", "complaint", "客服", "申诉", "反馈渠道"],
