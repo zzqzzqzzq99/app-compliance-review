@@ -126,6 +126,13 @@ def scan_materials(materials_dir):
             if not f.startswith(".") and not f.startswith("_"):
                 all_files.append(os.path.join(root, f))
 
+    # 材料类型 → 允许的扩展名（未声明扩展名的材料不做后缀限制）
+    allowed_extensions = {
+        mat["id"]: [e.lower() for e in mat["extensions"]]
+        for mat in REQUIRED_MATERIALS + OPTIONAL_MATERIALS
+        if mat.get("extensions")
+    }
+
     # 对每个文件尝试匹配材料类型
     for file_path in all_files:
         file_name = os.path.basename(file_path).lower()
@@ -134,10 +141,14 @@ def scan_materials(materials_dir):
         for mat_id, keywords in FILE_KEYWORDS.items():
             if mat_id in found_materials:
                 continue
-            for kw in keywords:
-                if kw.lower() in file_name:
-                    found_materials[mat_id] = file_path
-                    break
+            # 后缀不符的文件不得充当该材料（例如 .xlsx 不能充当 APK）
+            expected_exts = allowed_extensions.get(mat_id)
+            if expected_exts and file_ext not in expected_exts:
+                continue
+            if any(kw.lower() in file_name for kw in keywords):
+                found_materials[mat_id] = file_path
+                # 一个文件只认定为一种材料，避免同一文件重复充当多类材料
+                break
 
     return found_materials
 
@@ -193,11 +204,26 @@ def print_report(result):
     print(f"完整度评分: {result['completeness_score']}/100")
     print(f"必需材料: {result['total_found_required']}/{result['total_required']} 已提供")
 
+    required_ids = {m["id"] for m in REQUIRED_MATERIALS}
+    all_names = {m["id"]: m["name"] for m in REQUIRED_MATERIALS + OPTIONAL_MATERIALS}
+
     print("\n✅ 已提供的必需材料:")
     for mat_id, path in result["found_materials"].items():
-        mat_name = next((m["name"] for m in REQUIRED_MATERIALS if m["id"] == mat_id), mat_id)
-        print(f"  ✅ {mat_name}")
+        if mat_id not in required_ids:
+            continue
+        print(f"  ✅ {all_names.get(mat_id, mat_id)}")
         print(f"     → {path}")
+
+    provided_optional = [
+        (mat_id, path)
+        for mat_id, path in result["found_materials"].items()
+        if mat_id not in required_ids
+    ]
+    if provided_optional:
+        print("\n✅ 已提供的可选材料:")
+        for mat_id, path in provided_optional:
+            print(f"  ✅ {all_names.get(mat_id, mat_id)}")
+            print(f"     → {path}")
 
     if result["missing_required"]:
         print("\n❌ 缺失的必需材料（须补充）:")
